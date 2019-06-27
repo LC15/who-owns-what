@@ -18,6 +18,16 @@ export default {
     return null;
   },
 
+  maxArray(array) {
+    var max = 0; 
+    for (let i = 0; i < array.length; i++) {
+      if (max < array[i]) {
+        max = array[i]
+      }
+    }
+    return max;
+  },
+
   splitBBL(bbl) {
     bbl = bbl.split('');
     const boro = bbl.slice(0,1).join('');
@@ -28,6 +38,10 @@ export default {
 
   addrsAreEqual(a, b) {
     return a.bbl === b.bbl;
+  },
+
+  jsonEqual(a,b) {
+    return JSON.stringify(a) === JSON.stringify(b);
   },
 
   intersectAddrObjects(a,b){
@@ -41,6 +55,26 @@ export default {
      if(nycha_bbls[index].bbl == bbl) return nycha_bbls[index].development;
    }
    return null;
-  } 
+  },
+   
+  capitalize(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
+  },
+
+  pluralize(number) {
+    return (number === 1 ? '' : 's');
+  },
+
+  titleCase(string) {
+    return string.toLowerCase().split(' ').map(function(word) {
+      return (word.charAt(0).toUpperCase() + word.slice(1));
+    }).join(' ');
+  },
+
+  formatDate(dateString) {
+    var date = new Date(dateString);
+    var options = {year: 'numeric', month: 'long'};
+    return date.toLocaleDateString("en-US", options);
+  }
 
 };

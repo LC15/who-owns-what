@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import { Redirect } from 'react-router-dom';
 import FileSaver from 'file-saver';
-import Helpers from 'util/helpers';
 import Browser from 'util/browser';
 
 import _find from 'lodash/find';
@@ -10,10 +9,12 @@ import AddressToolbar from 'components/AddressToolbar';
 import PropertiesMap from 'components/PropertiesMap';
 import PropertiesList from 'components/PropertiesList';
 import PropertiesSummary from 'components/PropertiesSummary';
+import Indicators from 'components/Indicators';
 import DetailView from 'components/DetailView';
 import APIClient from 'components/APIClient';
 
 import 'styles/AddressPage.css';
+import { GeoSearchRequester } from '../util/geo-autocomplete-base';
 
 export default class AddressPage extends Component {
   constructor(props) {
@@ -23,7 +24,7 @@ export default class AddressPage extends Component {
       searchAddress: { ...props.match.params },   // maybe this should be
       userAddr: {},                               // merged together?
       hasSearched: false,
-      geoclient: {},
+      geosearch: {},
       assocAddrs: [],
       detailAddr: null,
       detailMobileSlide: false,
@@ -42,8 +43,17 @@ export default class AddressPage extends Component {
     // Otherwise they navigated directly to this url, so lets fetch it
     } else {
       window.gtag('event', 'direct-link');
-      APIClient.searchAddress(this.state.searchAddress)
-        .then(results => {
+      const req = new GeoSearchRequester({});
+      const {boro, housenumber, streetname} = this.state.searchAddress;
+      const addr = `${housenumber} ${streetname}, ${boro}`;
+      console.log('searching for', addr);
+      req.fetchResults(addr).then(results => {
+        const firstResult = results.features[0];
+        if (!firstResult) throw new Error('Invalid address!');
+        return APIClient.searchAddress({
+          bbl: firstResult.properties.pad_bbl
+        });
+      }).then(results => {
           this.handleResults(results);
         })
         .catch(err => {
@@ -58,26 +68,32 @@ export default class AddressPage extends Component {
 
   // Processes the results and setState accordingly. Doesn't care where results comes from
   handleResults = (results) => {
-    const { geoclient, addrs } = results;
+    const { geosearch, addrs } = results;
 
     this.setState({
-      searchAddress: { ...this.state.searchAddress, bbl: geoclient.bbl },
-      userAddr: _find(addrs, { bbl: geoclient.bbl }),
+      searchAddress: { ...this.state.searchAddress, bbl: geosearch.bbl },
+      userAddr: _find(addrs, { bbl: geosearch.bbl }),
       hasSearched: true,
-      geoclient: geoclient,
+      geosearch: geosearch,
       assocAddrs: addrs
     }, () => {
-      this.handleOpenDetail(this.state.userAddr);
+      this.handleAddrChange(this.state.userAddr);
     });
 
   }
 
-  handleOpenDetail = (addr) => {
+  handleAddrChange = (addr) => {
     this.setState({
       detailAddr: addr,
       detailMobileSlide: true,
       currentTab: 0
     });
+  }
+
+  handleTimelineLink = () => {
+    this.setState({
+      currentTab: 1
+    })
   }
 
   handleCloseDetail = () => {
@@ -103,13 +119,13 @@ export default class AddressPage extends Component {
 
     if(this.state.hasSearched && this.state.assocAddrs.length === 0)  {
 
-      const geoclient = this.state.geoclient;
+      const geosearch = this.state.geosearch;
       const searchAddress = this.state.searchAddress;
 
       return (
         <Redirect to={{
           pathname: '/not-found',
-          state: { geoclient, searchAddress }
+          state: { geosearch, searchAddress }
         }}></Redirect>
       );
     }
@@ -125,23 +141,32 @@ export default class AddressPage extends Component {
           { this.state.userAddr &&
             <div className="float-left">
               <h5 className="primary">
-                This landlord is associated with <u>{this.state.assocAddrs.length}</u> building{this.state.assocAddrs.length === 1 ? '':'s'}:
+                PORTFOLIO: Your search address is associated with <u>{this.state.assocAddrs.length}</u> building{this.state.assocAddrs.length === 1 ? '':'s'}:
               </h5>
               <ul className="tab tab-block">
                 <li className={`tab-item ${this.state.currentTab === 0 ? "active" : ""}`}>
-                  <a onClick={() => {
-                    if(Browser.isMobile() && this.state.detailMobileSlide) {
-                      this.handleCloseDetail();
-                    }
-                    this.setState({ currentTab: 0 });
-                  }}>Map</a>
+                  <a // eslint-disable-line jsx-a11y/anchor-is-valid
+                    onClick={() => {
+                      if(Browser.isMobile() && this.state.detailMobileSlide) {
+                        this.handleCloseDetail();
+                      }
+                      this.setState({ currentTab: 0 });
+                    }}
+                  >Overview</a>
                 </li>
                 <li className={`tab-item ${this.state.currentTab === 1 ? "active" : ""}`}>
-                  <a onClick={() => this.setState({ currentTab: 1 })}>List</a>
+                  <a // eslint-disable-line jsx-a11y/anchor-is-valid
+                    onClick={() => {this.setState({ currentTab: 1 }); window.gtag('event', 'timeline-tab');}}>Timeline</a>
                 </li>
                 <li className={`tab-item ${this.state.currentTab === 2 ? "active" : ""}`}>
-                  <a onClick={() => this.setState({ currentTab: 2 })}>Summary</a>
+                  <a // eslint-disable-line jsx-a11y/anchor-is-valid
+                    onClick={() => {this.setState({ currentTab: 2 }); window.gtag('event', 'portfolio-tab');}}>Portfolio</a>
                 </li>
+                <li className={`tab-item ${this.state.currentTab === 3 ? "active" : ""}`}>
+                  <a // eslint-disable-line jsx-a11y/anchor-is-valid
+                    onClick={() => {this.setState({ currentTab: 3 }); window.gtag('event', 'summary-tab');}}>Summary</a>
+                </li>
+                
               </ul>
             </div>
           }
@@ -151,7 +176,7 @@ export default class AddressPage extends Component {
             addrs={this.state.assocAddrs}
             userAddr={this.state.userAddr}
             detailAddr={this.state.detailAddr}
-            onOpenDetail={this.handleOpenDetail}
+            onAddrChange={this.handleAddrChange}
             isVisible={this.state.currentTab === 0}
           />
           <DetailView
@@ -160,22 +185,31 @@ export default class AddressPage extends Component {
             mobileShow={this.state.detailMobileSlide}
             userAddr={this.state.userAddr}
             onCloseDetail={this.handleCloseDetail}
+            onLinkToTimeline={this.handleTimelineLink}
           />
         </div>
-        <div className={`AddressPage__content AddressPage__table ${this.state.currentTab === 1 ? "AddressPage__content-active": ''}`}>
+        <div className={`AddressPage__content AddressPage__summary ${this.state.currentTab === 1 ? "AddressPage__content-active": ''}`}>
+          <Indicators
+            isVisible={this.state.currentTab === 1}
+            detailAddr={this.state.detailAddr}
+            onBackToOverview={this.handleAddrChange}
+          />
+        </div>
+        <div className={`AddressPage__content AddressPage__table ${this.state.currentTab === 2 ? "AddressPage__content-active": ''}`}>
           {
            <PropertiesList
               addrs={this.state.assocAddrs}
-              onOpenDetail={this.handleOpenDetail}
+              onOpenDetail={this.handleAddrChange}
             />
           }
         </div>
-        <div className={`AddressPage__content AddressPage__summary ${this.state.currentTab === 2 ? "AddressPage__content-active": ''}`}>
+        <div className={`AddressPage__content AddressPage__summary ${this.state.currentTab === 3 ? "AddressPage__content-active": ''}`}>
           <PropertiesSummary
-            isVisible={this.state.currentTab === 2}
+            isVisible={this.state.currentTab === 3}
             userAddr={this.state.userAddr}
           />
         </div>
+        
 
       </div>
     );

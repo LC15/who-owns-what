@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Redirect, Link } from 'react-router-dom';
+import { Redirect } from 'react-router-dom';
 
 import Loader from 'components/Loader';
 import APIClient from 'components/APIClient';
@@ -31,6 +31,18 @@ export default class BBLPage extends Component {
       });
     }
 
+    else if (this.state.searchBBL.boro && this.state.searchBBL.block && this.state.searchBBL.lot) {
+      const searchBBL = {
+        boro: this.state.searchBBL.boro,
+        block: this.state.searchBBL.block.padStart(5,'0'),
+        lot: this.state.searchBBL.lot.padStart(4,'0')
+      };
+
+      this.setState({
+        searchBBL: searchBBL
+      });
+    }
+
   }
 
 
@@ -59,13 +71,14 @@ export default class BBLPage extends Component {
 
       // redirect doesn't like `this` so lets make a ref
       const results = this.state.results;
-      const geoclient = results.geoclient;
+      const geosearch = results.geosearch;
       let searchAddress = {};
-      if(geoclient) {
-        searchAddress.housenumber = geoclient.giLowHouseNumber1;
-        searchAddress.streetname = geoclient.giStreetName1;
-        searchAddress.boro = geoclient.firstBoroughName;
-      }
+
+      // if(geosearch) {
+      //   searchAddress.housenumber = geosearch.giLowHouseNumber1;
+      //   searchAddress.streetname = geosearch.giStreetName1;
+      //   searchAddress.boro = geosearch.firstBoroughName;
+      // }
 
       // no addrs = not found
       if(!this.state.results.addrs || !this.state.results.addrs.length) {
@@ -73,13 +86,14 @@ export default class BBLPage extends Component {
         return (
           <Redirect to={{
             pathname: '/not-found',
-            state: { geoclient, searchAddress }
+            state: { geosearch, searchAddress }
           }}></Redirect>
         );
 
       // lets redirect to AddressPage and pass the results along with us
       } else {
         window.gtag('event', 'search-found', { 'value': this.state.results.addrs.length });
+        const searchAddress = this.state.results.addrs.find( (element) => (element.bbl === this.state.searchBBL.boro + this.state.searchBBL.block + this.state.searchBBL.lot));
         return (
           <Redirect to={{
             pathname: `/address/${searchAddress.boro}/${searchAddress.housenumber}/${searchAddress.streetname}`,

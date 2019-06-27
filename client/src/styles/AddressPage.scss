@@ -12,7 +12,7 @@
 
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  max-width: 100%;
 
   .AddressPage__info {
     width: 100%;
@@ -30,6 +30,10 @@
       &.primary {
         line-height: 20px;
         margin-bottom: 20px;
+
+        @include for-tablet-landscape-down() {
+          max-width: 385px;
+        }
       }
     }
 
@@ -48,6 +52,7 @@
     flex: 1;
     // flex-grow: 1;
     // height: 100%;
+    overflow: hidden;
 
     border-top: 1px solid $gray-dark;
 

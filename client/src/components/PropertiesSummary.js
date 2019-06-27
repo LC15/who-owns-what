@@ -1,5 +1,4 @@
 import React, { Component } from 'react';
-import Helpers from 'util/helpers';
 import { FacebookButton, TwitterButton, EmailButton } from 'react-social';
 
 import Loader from 'components/Loader';
@@ -13,8 +12,10 @@ import twitterIcon from '../assets/img/twitter.svg';
 
 const VIOLATIONS_AVG = 0.7; // By Unit
 
-// 1588195 open violations according to wow_bldgs
-// 2299803 total units in registered buildings, according to wow_bldgs
+// 1656793 open violations according to wow_bldgs
+// 2331139 total units in registered buildings, according to wow_bldgs
+
+// Data updated 6/6/19
 
 export default class PropertiesSummary extends Component {
   constructor(props) {
@@ -57,12 +58,17 @@ export default class PropertiesSummary extends Component {
             <div>
               <h6>General info</h6>
               <p>
-                There are <b>{agg.bldgs}</b> buildings in this portfolio with a total of <b>{agg.units}</b> units. The average age of these buildings is <b>{agg.age}</b> years old.
+                There {parseInt(agg.bldgs) === 1 ? 
+                  <span>is <b>1</b> building </span> :
+                  <span>are <b>{agg.bldgs}</b> buildings </span>}
+                in this portfolio with a total of {agg.units} unit{parseInt(agg.units) === 1 ? "" : "s"}.
+                The {parseInt(agg.bldgs) === 1 ? "" : "average"} age of {parseInt(agg.bldgs) === 1 ? "this building " : "these buildings "}
+                is <b>{agg.age}</b> years old.
               </p>
               <aside>
                 {agg.violationsaddr && (
                   <figure className="figure">
-                    <img src={`https://maps.googleapis.com/maps/api/streetview?size=800x500&location=${agg.violationsaddr.lat},${agg.violationsaddr.lng}&key=AIzaSyCJKZm-rRtfREo2o-GNC-feqpbSvfHNB5s`}
+                    <img src={`https://maps.googleapis.com/maps/api/streetview?size=800x500&location=${agg.violationsaddr.lat},${agg.violationsaddr.lng}&key=${process.env.REACT_APP_STREETVIEW_API_KEY}`}
                            alt="Google Street View" className="img-responsive"  />
                     <figcaption className="figure-caption text-center text-italic">
                       {agg.violationsaddr.housenumber} {agg.violationsaddr.streetname}, {agg.violationsaddr.boro} currently has {agg.violationsaddr.openviolations} open HPD violations - the most in this portfolio.
@@ -72,7 +78,10 @@ export default class PropertiesSummary extends Component {
 
               </aside>
               <h6>Landlord</h6>
-              <p>The most common names that appear in this portfolio are
+              <p>The most common
+                  {agg.topowners.length > 1 ?
+                  <span> names that appear in this portfolio are </span> : 
+                  <span> name that appears in this portfolio is </span> }
                 <b>{agg.topowners && agg.topowners.map((owner,idx) => {
                   return (
                     <span key={idx}>
@@ -93,33 +102,39 @@ export default class PropertiesSummary extends Component {
               </p>
               <h6>Evictions</h6>
               <p>
-                In 2017, NYC Marshals scheduled <b>{agg.totalevictions > 0 ? agg.totalevictions : "0"}</b> eviction{agg.totalevictions == 1 ? "" : "s"} across this portfolio.
+                In 2018, NYC Marshals scheduled <b>{agg.totalevictions > 0 ? agg.totalevictions : "0"}</b> eviction{parseInt(agg.totalevictions) === 1 ? "" : "s"} across this portfolio.
                 {agg.totalevictions > 0 ?
                   <span> The building with the most evictions was&nbsp;
                     {agg.evictionsaddr && (
                       <span>
-                        <b>{agg.evictionsaddr.housenumber} {agg.evictionsaddr.streetname}, {agg.evictionsaddr.boro}</b> with <b>{agg.evictionsaddr.evictions}</b> eviction{agg.totalevictions == 1 ? "" : "s"} that year
+                        <b>{agg.evictionsaddr.housenumber} {agg.evictionsaddr.streetname}, {agg.evictionsaddr.boro}</b> with <b>{agg.evictionsaddr.evictions}</b> eviction{parseInt(agg.totalevictions) === 1 ? "" : "s"} that year
                       </span>
                     )}.
                   </span> : ""}
               </p>
               <h6>Rent stabilization</h6>
               <p>
-                This portfolio also had an estimated <b>net {agg.totalrsdiff > 0 ? "gain" : "loss"}</b> of <b>{Math.abs(parseInt(agg.totalrsdiff, 10))}</b> rent stabilized units since 2007 (gained {Math.abs(parseInt(agg.totalrsgain, 10))}, lost {Math.abs(parseInt(agg.totalrsloss, 10))}).
-                This represents <b>{agg.rsproportion}%</b> of the total size of this portfolio. The building that has lost the most units is&nbsp;
-                {agg.rslossaddr && (
+                This portfolio also had an estimated <b>net {agg.totalrsdiff > 0 ? "gain" : "loss"}</b> of <b>{Math.abs(parseInt(agg.totalrsdiff, 10)) || 0}</b> rent stabilized unit{parseInt(agg.totalrsdiff) === 1 ? "" : "s"} since 2007 (gained {Math.abs(parseInt(agg.totalrsgain, 10)) || 0}, lost {Math.abs(parseInt(agg.totalrsloss, 10)) || 0}).
+                This represents <b>{agg.rsproportion || 0}%</b> of the total size of this portfolio. 
+                {agg.rslossaddr && (agg.rslossaddr.rsdiff < 0) ?
+                (<span> The building that has lost the most units is&nbsp;
                   <b>
                     {agg.rslossaddr.housenumber} {agg.rslossaddr.streetname}, {agg.rslossaddr.boro}
                   </b>
-                )}
-                , which has lost <b>{agg.rslossaddr && Math.abs(parseInt(agg.rslossaddr.rsdiff, 10))}</b> units in the past 10 years.
+                  , which has lost <b>{Math.abs(parseInt(agg.rslossaddr.rsdiff, 10))}</b> unit{Math.abs(parseInt(agg.rslossaddr.rsdiff, 10)) === 1 ? "" : "s"} in the past 10 years.
+                 </span>) :
+                 ""}
               </p>
               <aside>
                 <div className="PropertiesSummary__links">
                   <span className="PropertiesSummary__linksTitle"><em>Additional links</em></span>
                   <div>
-                    <h6 className="PropertiesSummary__linksSubtitle">Want more info on this landlord?</h6>
-                    <a href="mailto:hello@justfix.nyc?subject=Who Owns What Data Request" target="_blank" className="btn btn-block">Send us a data request</a>
+                    <h6 className="PropertiesSummary__linksSubtitle">Looking for more information?</h6>
+                    <a onClick={() => {window.gtag('event', 'data-request');}} href={encodeURI(`https://docs.google.com/forms/d/e/1FAIpQLSfHdokAh4O-vB6jO8Ym0Wv_lL7cVUxsWvxw5rjZ9Ogcht7HxA/viewform?usp=pp_url&entry.1164013846=${this.props.userAddr.housenumber}+${this.props.userAddr.streetname},+${this.props.userAddr.boro}`)} target="_blank" rel="noopener noreferrer" className="btn btn-block">
+                      <div>
+                        <label>Send us a data request</label>
+                      </div>
+                    </a>
                   </div>
                   <div>
                     <h6 className="PropertiesSummary__linksSubtitle">Share this page with your neighbors</h6>

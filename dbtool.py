@@ -3,8 +3,11 @@ import sys
 import subprocess
 import argparse
 import time
+import yaml
+import nycdb.dataset
+from nycdb.utility import list_wrap
 from urllib.parse import urlparse
-from typing import NamedTuple, Any, Tuple, Optional
+from typing import NamedTuple, Any, Tuple, Optional, Dict, List
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +21,7 @@ except ModuleNotFoundError:
 
 ROOT_DIR = Path(__file__).parent.resolve()
 SQL_DIR = ROOT_DIR / 'sql'
+WOW_YML = yaml.load((ROOT_DIR / 'who-owns-what.yml').read_text())
 
 # Just an alias for our database connection.
 DbConnection = Any
@@ -55,19 +59,22 @@ class DbContext(NamedTuple):
             port=port
         )
 
-    def connection(self) -> DbConnection:
-        import psycopg2
-
-        tries_left = 5
-        secs_between_tries = 2
-
-        connect = lambda: psycopg2.connect(
+    def psycopg2_connect_kwargs(self) -> Dict[str, Any]:
+        return dict(
             user=self.user,
             password=self.password,
             host=self.host,
             database=self.database,
             port=self.port
         )
+
+    def connection(self) -> DbConnection:
+        import psycopg2
+
+        tries_left = 5
+        secs_between_tries = 2
+
+        connect = lambda: psycopg2.connect(**self.psycopg2_connect_kwargs())
 
         while tries_left > 1:
             try:
@@ -77,6 +84,20 @@ class DbContext(NamedTuple):
                 time.sleep(secs_between_tries)
                 tries_left -= 1
         return connect()
+
+    def get_pg_env_and_args(self) -> Tuple[Dict[str, str], List[str]]:
+        '''
+        Return an environment dictionary and command-line arguments that
+        can be passed to Postgres command-line tools (e.g. psql, pg_dump) to
+        connect to the database.
+        '''
+
+        env = os.environ.copy()
+        env['PGPASSWORD'] = db.password
+        args = [
+            '-h', db.host, '-p', str(db.port), '-U', db.user, '-d', db.database
+        ]
+        return (env, args)
 
 
 class NycDbBuilder:
@@ -132,9 +153,15 @@ class NycDbBuilder:
                 print(f"Removing {csv_file.name} so it can be re-downloaded.")
                 csv_file.unlink()
 
-    def ensure_dataset(self, name: str, force_refresh: bool=False,
-                       extra_tables: Optional[Tuple[str]]=None) -> None:
-        tables = [name, *(extra_tables or ())]
+    def ensure_dataset(self, name: str, force_refresh: bool=False) -> None:
+        dataset = nycdb.dataset.datasets()[name]
+        tables: List[str] = [
+            schema['table_name']
+            for schema in list_wrap(dataset['schema'])
+        ]
+        tables_str = 'table' if len(tables) == 1 else 'tables'
+        print(f"Ensuring NYCDB dataset '{name}' is loaded with {len(tables)} {tables_str}...")
+
         if force_refresh:
             self.drop_tables(*tables)
             self.delete_downloaded_data(*tables)
@@ -159,38 +186,136 @@ class NycDbBuilder:
         else:
             print("Loading the database with real data (this could take a while).")
 
-        self.ensure_dataset('pluto_17v1')
-        self.ensure_dataset('pluto_18v1')
-        self.ensure_dataset('rentstab_summary')
-        self.ensure_dataset('marshal_evictions_17', force_refresh=force_refresh)
-        self.ensure_dataset('hpd_registrations', force_refresh=force_refresh,
-                            extra_tables=('hpd_contacts',))
+        for dataset in get_dataset_dependencies():
+            self.ensure_dataset(dataset, force_refresh=force_refresh)
 
-        print("Running custom SQL for HPD registrations...")
-        self.run_sql_file(SQL_DIR / 'registrations_with_contacts.sql')
+        for sqlpath in get_sqlfile_paths():
+            print(f"Running {sqlpath.name}...")
+            self.run_sql_file(sqlpath)
 
-        self.ensure_dataset('hpd_violations', force_refresh=force_refresh)
 
-        WOW_SCRIPTS = [
-            ("Creating WoW buildings table...", "create_bldgs_table.sql"),
-            ("Adding helper functions...", "helper_functions.sql"),
-            ("Creating WoW search function...", "search_function.sql"),
-            ("Creating WoW agg function...", "agg_function.sql"),
-            ("Creating hpd landlord contact table...", "landlord_contact.sql"),
-        ]
+def get_dataset_dependencies() -> List[str]:
+    return WOW_YML['dependencies']
 
-        for desc, filename in WOW_SCRIPTS:
-            print(desc)
-            self.run_sql_file(SQL_DIR / filename)
+
+def get_sqlfile_paths() -> List[Path]:
+    return [SQL_DIR / sqlfile for sqlfile in WOW_YML['sql']]
 
 
 def dbshell(db: DbContext):
-    env = os.environ.copy()
-    env['PGPASSWORD'] = db.password
-    retval = subprocess.call([
-        'psql', '-h', db.host, '-p', str(db.port), '-U', db.user, '-d', db.database
-    ], env=env)
+    env, args = db.get_pg_env_and_args()
+    retval = subprocess.call(['psql', *args], env=env)
     sys.exit(retval)
+
+
+def loadtestdata(db: DbContext):
+    '''
+    Loads test data previously created from the 'exporttestdata' command into
+    the database.
+    '''
+
+    sqlfile = (ROOT_DIR / 'tests' / 'exported_test_data.sql')
+    sql = sqlfile.read_text()
+
+    NycDbBuilder(db, is_testing=True).build(force_refresh=False)
+
+    print(f"Loading test data from {sqlfile}...")
+    with db.connection() as conn:
+        cur = conn.cursor()
+        cur.execute(sql)
+    print("Loaded test data into database.")
+
+
+def export_table_subset(db: DbContext, table_name: str, query: str) -> str:
+    '''
+    Returns SQL INSERT statements that will populate the given table
+    with *only* the rows specified by the given query.
+    '''
+
+    temp_table_name = f'temp_table_for_export_as_{table_name}'
+
+    with db.connection() as conn:
+        cur = conn.cursor()
+        cur.execute(f"DROP TABLE IF EXISTS {temp_table_name}")
+        cur.execute(f"CREATE TABLE {temp_table_name} AS {query}")
+
+    try:
+        env, args = db.get_pg_env_and_args()
+        sql = subprocess.check_output([
+            'pg_dump',
+            *args,
+            '--table', temp_table_name,
+            '--data-only',
+            '--column-inserts',
+        ], env=env).decode('ascii').replace(temp_table_name, table_name)
+        return f"DELETE FROM public.{table_name};\n\n{sql}"
+    finally:
+        with db.connection() as conn:
+            cur = conn.cursor()
+            cur.execute(f"DROP TABLE {temp_table_name}")
+
+
+def exporttestdata(db: DbContext):
+    '''
+    This command must be run on a fully populated database, but the SQL
+    it generates can be useful for test suites and developers who want to
+    work on WoW without first processing lots of data.
+    '''
+
+    # This is the BBL of 654 PARK PLACE, BROOKLYN, which is an
+    # All Year Management property.
+    bbl = "3012380016"
+
+    with db.connection() as conn:
+        cur = conn.cursor()
+        # Get the registration ID for the BBL we care about.
+        cur.execute(
+            f"SELECT DISTINCT registrationid FROM wow_bldgs WHERE bbl = '{bbl}'")
+        reg_id = cur.fetchone()[0]
+
+    sql = '\n'.join([
+        export_table_subset(
+            db,
+            'hpd_business_addresses',
+            # This grabs only the subset of HPD business addresses
+            # used by get_regids_from_regid_by_bisaddr() for the
+            # registration ID we care about.
+            f"SELECT * FROM hpd_business_addresses WHERE {reg_id} = any(uniqregids)"
+        ),
+        export_table_subset(
+            db,
+            'hpd_contacts',
+            # This grabs only the subset of HPD contacts
+            # used by get_regids_from_regid_by_owners() for the
+            # registration ID we care about.
+            f"SELECT * FROM hpd_contacts WHERE registrationid = {reg_id}"
+        ),
+        export_table_subset(
+            db,
+            'wow_bldgs',
+            # TODO: This is basically a copy-paste of the body of the
+            # get_assoc_addrs_from_bbl() function defined in
+            # search_function.sql. It would be nice if we could just
+            # reuse that code instead of duplicating it here.
+            f"""
+            SELECT bldgs.* FROM wow_bldgs AS bldgs
+            INNER JOIN (
+                (SELECT DISTINCT registrationid FROM wow_bldgs r WHERE r.bbl = '{bbl}') userreg
+                LEFT JOIN LATERAL
+                (
+                SELECT
+                    unnest(anyarray_uniq(array_cat_agg(merged.uniqregids))) AS regid
+                FROM (
+                    SELECT uniqregids FROM get_regids_from_regid_by_bisaddr(userreg.registrationid)
+                    UNION SELECT uniqregids FROM get_regids_from_regid_by_owners(userreg.registrationid)
+                ) AS merged
+                ) merged2 ON true
+            ) assocregids ON (bldgs.registrationid = assocregids.regid)
+            """
+        )
+    ])
+
+    print(sql)
 
 
 if __name__ == '__main__':
@@ -203,6 +328,12 @@ if __name__ == '__main__':
         default=os.environ.get('DATABASE_URL', '')
     )
 
+    parser_exporttestdata = subparsers.add_parser('exporttestdata')
+    parser_exporttestdata.set_defaults(cmd='exporttestdata')
+
+    parser_loadtestdata = subparsers.add_parser('loadtestdata')
+    parser_loadtestdata.set_defaults(cmd='loadtestdata')
+
     parser_builddb = subparsers.add_parser('builddb')
     parser_builddb.add_argument(
         '-t', '--use-test-data', action='store_true',
@@ -211,7 +342,7 @@ if __name__ == '__main__':
     )
     parser_builddb.add_argument(
         '--update', action='store_true',
-        help=('Delete downloaded data & tables for the most frequently-updated '
+        help=('Delete downloaded data & tables for the '
               'data sets so they can be re-downloaded and re-installed.')
     )
     parser_builddb.set_defaults(cmd='builddb')
@@ -239,7 +370,11 @@ if __name__ == '__main__':
 
     cmd = getattr(args, 'cmd', '')
 
-    if cmd == 'dbshell':
+    if cmd == 'exporttestdata':
+        exporttestdata(db)
+    elif cmd == 'loadtestdata':
+        loadtestdata(db)
+    elif cmd == 'dbshell':
         dbshell(db)
     elif cmd == 'builddb':
         NycDbBuilder(db, is_testing=args.use_test_data).build(
