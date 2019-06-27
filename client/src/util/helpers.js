@@ -52,11 +52,11 @@ export default {
 
   getNychaDevelopment(bbl,nycha_bbls) {
     for (var index = 0; index < nycha_bbls.length; index++ ) {
-     if(nycha_bbls[index].bbl == bbl) return nycha_bbls[index].development;
+     if(nycha_bbls[index].bbl === bbl) return nycha_bbls[index].development;
    }
    return null;
   },
-   
+
   capitalize(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
   },

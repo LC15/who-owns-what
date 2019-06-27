@@ -92,9 +92,10 @@ export default class NotRegisteredPage extends Component {
         <div className="HomePage__content">
           <div className="HomePage__search">
             <h5 className="mt-10 text-danger text-center text-bold text-large">
-            {geosearch && geosearch.bbl && (Helpers.getNychaDevelopment(geosearch.bbl,nycha_bbls) ? 
+            {(geosearch && geosearch.bbl && (Helpers.getNychaDevelopment(geosearch.bbl,nycha_bbls)) ? 
               <span>This is a Nycha Address</span> :
-              <span>No registration found</span>}
+            <span>No registration found</span>)}
+
               {usersInputAddress ? (
                  <span> for {usersInputAddress}</span>
               ) : (
@@ -105,7 +106,7 @@ export default class NotRegisteredPage extends Component {
               
             </h6>
             <h6 className="mt-10 text-center text-bold text-large">
-              { Helpers.getNychaDevelopment(geoclient.bbl,nycha_bbls) ? (<span>Development: {Helpers.getNychaDevelopment(geoclient.bbl,nycha_bbls)}</span>):(<span></span>) }
+              { geosearch && geosearch.bbl && Helpers.getNychaDevelopment(geosearch.bbl,nycha_bbls) ? (<span>Development: {Helpers.getNychaDevelopment(geosearch.bbl,nycha_bbls)}</span>):(<span></span>) }
             </h6>
             <h6 className="mt-10 text-center text-bold text-large">
               {buildingTypeMessage}
