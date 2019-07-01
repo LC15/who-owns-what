@@ -3,6 +3,7 @@ import { Redirect } from 'react-router-dom';
 
 import Loader from 'components/Loader';
 import APIClient from 'components/APIClient';
+import Helpers from 'util/helpers';
 
 // import 'styles/HomePage.css';
 
@@ -85,9 +86,11 @@ export default class BBLPage extends Component {
         window.gtag('event', 'search-notfound');
         return (
           <Redirect to={{
-            pathname: '/not-found',
+            pathname: (geosearch.bbl && Helpers.getNychaDevelopment(geosearch.bbl) ? 
+              ('/nycha/' + Helpers.getNychaDevelopment(geosearch.bbl).development)  : 
+              'not-found'),
             state: { geosearch, searchAddress }
-          }}></Redirect>
+          }}></Redirect> 
         );
 
       // lets redirect to AddressPage and pass the results along with us

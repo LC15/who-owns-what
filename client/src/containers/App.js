@@ -16,6 +16,7 @@ import BBLPage from 'BBLPage';
 import AboutPage from 'AboutPage';
 import HowItWorksPage from 'HowItWorksPage';
 import NotRegisteredPage from 'NotRegisteredPage';
+import NYCHAPage from 'NYCHAPage';
 import TermsOfUsePage from 'TermsOfUsePage';
 import PrivacyPolicyPage from 'PrivacyPolicyPage';
 import ScrollToTop from 'components/ScrollToTop';
@@ -65,6 +66,7 @@ render() {
               <Switch>
                 <Route exact path="/" component={HomePage} />
                 <Route path="/not-found" component={NotRegisteredPage} />
+                <Route path="/nycha/:development" component={NYCHAPage} />
                 <Route path="/address/:boro/:housenumber/:streetname" component={AddressPage} />
                 <Route path="/bbl/:boro/:block/:lot" component={BBLPage} />
                 <Route path="/bbl/:bbl" component={BBLPage} />

@@ -7,7 +7,7 @@ import APIClient from 'components/APIClient';
 
 import 'styles/NotRegisteredPage.css';
 
-export default class NotRegisteredPage extends Component {
+export default class NYCHAPage extends Component {
   constructor(props) {
     super(props);
 
@@ -90,7 +90,9 @@ export default class NotRegisteredPage extends Component {
         <div className="HomePage__content">
           <div className="HomePage__search">
             <h5 className="mt-10 text-danger text-center text-bold text-large">
-            <span>No registration found</span>
+            {(geosearch && geosearch.bbl && (Helpers.getNychaDevelopment(geosearch.bbl)) ? 
+              <span>This is a Nycha Address</span> :
+            <span>No registration found</span>)}
 
               {usersInputAddress ? (
                  <span> for {usersInputAddress}</span>
@@ -98,6 +100,12 @@ export default class NotRegisteredPage extends Component {
                 <span></span>
               )}!
             </h5>
+            <h6> 
+              
+            </h6>
+            <h6 className="mt-10 text-center text-bold text-large">
+              { geosearch && geosearch.bbl && Helpers.getNychaDevelopment(geosearch.bbl) ? (<span>Development: {Helpers.getNychaDevelopment(geosearch.bbl).development}</span>):(<span></span>) }
+            </h6>
             <h6 className="mt-10 text-center text-bold text-large">
               {buildingTypeMessage}
             </h6>

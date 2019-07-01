@@ -12,6 +12,7 @@ import PropertiesSummary from 'components/PropertiesSummary';
 import Indicators from 'components/Indicators';
 import DetailView from 'components/DetailView';
 import APIClient from 'components/APIClient';
+import Helpers from 'util/helpers';
 
 import 'styles/AddressPage.css';
 import { GeoSearchRequester } from '../util/geo-autocomplete-base';
@@ -124,9 +125,11 @@ export default class AddressPage extends Component {
 
       return (
         <Redirect to={{
-          pathname: '/not-found',
+          pathname: (geosearch.bbl && Helpers.getNychaDevelopment(geosearch.bbl) ? 
+            ('/nycha/' + Helpers.getNychaDevelopment(geosearch.bbl).development)  : 
+            'not-found'),
           state: { geosearch, searchAddress }
-        }}></Redirect>
+        }}></Redirect> 
       );
     }
 

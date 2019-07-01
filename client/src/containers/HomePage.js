@@ -12,6 +12,7 @@ import westminsterLogo from '../assets/img/westminster.svg';
 import allyearLogo from '../assets/img/allyear.png';
 import emLogo from '../assets/img/emassociates.jpg';
 import AddressSearch, { makeEmptySearchAddress } from '../components/AddressSearch';
+import Helpers from 'util/helpers';
 
 class HomePage extends Component {
   constructor(props) {
@@ -76,11 +77,13 @@ class HomePage extends Component {
       if(!this.state.results.addrs || !this.state.results.addrs.length) {
         window.gtag('event', 'search-notfound');
         return (
-          <Redirect push to={{
-            pathname: '/not-found',
+          <Redirect to={{
+            pathname: (geosearch.bbl && Helpers.getNychaDevelopment(geosearch.bbl) ? 
+              ('/nycha/' + Helpers.getNychaDevelopment(geosearch.bbl).development)  : 
+              'not-found'),
             state: { geosearch, searchAddress }
-          }}></Redirect>
-        );
+          }}></Redirect> 
+      );
 
       // lets redirect to AddressPage and pass the results along with us
       } else {

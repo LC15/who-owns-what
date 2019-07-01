@@ -3,6 +3,8 @@
 // import _keys from 'lodash/keys';
 import _pickBy from 'lodash/pickBy';
 
+import nycha_bbls from 'data/nycha_bbls.js';
+
 export default {
   // filter repeated values in rbas and owners
   // uses Set which enforces uniqueness
@@ -50,9 +52,9 @@ export default {
     });
   },
 
-  getNychaDevelopment(bbl,nycha_bbls) {
+  getNychaDevelopment(bbl) {
     for (var index = 0; index < nycha_bbls.length; index++ ) {
-     if(nycha_bbls[index].bbl === bbl) return nycha_bbls[index].development;
+     if(nycha_bbls[index].bbl === bbl) return nycha_bbls[index];
    }
    return null;
   },
